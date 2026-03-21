@@ -1,0 +1,64 @@
+#pragma once
+
+#include <cassert>
+#include <immintrin.h>
+#include <iostream>
+#include <limits>
+#include <vector>
+
+#include "graph.hpp"
+#include "types.h"
+
+inline uint32_t hsum_epu32(__m128i v) {
+  v = _mm_hadd_epi32(v, v);
+  v = _mm_hadd_epi32(v, v);
+  return _mm_cvtsi128_si32(v);
+}
+
+inline uint32_t dot_product(const Weight &w, const Weight &c) {
+  __m128i vw = _mm_load_si128((const __m128i *)w.v);
+  __m128i vc = _mm_load_si128((const __m128i *)c.v);
+  __m128i mul = _mm_mullo_epi32(vw, vc);
+  return hsum_epu32(mul);
+}
+
+class SweepDAG {
+private:
+  const Graph &graph;
+  std::vector<uint32_t> results;
+
+public:
+  SweepDAG(const Graph &graph)
+      : graph(graph), results(graph.numVertices(), INF) {}
+
+  void reset() { std::fill(results.begin(), results.end(), INF); }
+
+  void run(const Vertex source, const Weight &coeffs) {
+    assert(source < results.size());
+
+    reset();
+    results[source] = 0;
+
+    graph.doForAllEdges(
+        [&](const Vertex from, const Vertex to, const Weight &w) {
+          assert(from < results.size());
+          assert(to < results.size());
+
+          uint32_t du = results[from];
+          if (du == INF)
+            return;
+
+          uint32_t newCost = du + dot_product(w, coeffs);
+          results[to] = std::min(results[to], newCost);
+        });
+
+    std::cout << "Distances from node " << source << ":\n";
+    for (uint32_t i = 0; i < graph.numVertices(); ++i) {
+      std::cout << "Node " << i << ": ";
+      if (results[i] == INF)
+        std::cout << "INF\n";
+      else
+        std::cout << results[i] << "\n";
+    }
+  }
+};
