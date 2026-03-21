@@ -25,5 +25,8 @@ int main(int argc, char *argv[]) {
 
   algo.run(0, coeff);
 
+  for (Vertex v(0); v < graph.numVertices(); ++v) {
+    algo.printPath(v);
+  }
   return 0;
 }

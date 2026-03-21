@@ -26,12 +26,17 @@ class SweepDAG {
 private:
   const Graph &graph;
   std::vector<uint32_t> results;
+  std::vector<Vertex> parent;
 
 public:
   SweepDAG(const Graph &graph)
-      : graph(graph), results(graph.numVertices(), INF) {}
+      : graph(graph), results(graph.numVertices(), INF),
+        parent(graph.numVertices(), noVertex) {}
 
-  void reset() { std::fill(results.begin(), results.end(), INF); }
+  void reset() {
+    std::fill(results.begin(), results.end(), INF);
+    std::fill(parent.begin(), parent.end(), noVertex);
+  }
 
   void run(const Vertex source, const Weight &coeffs) {
     assert(source < results.size());
@@ -49,16 +54,41 @@ public:
             return;
 
           uint32_t newCost = du + dot_product(w, coeffs);
-          results[to] = std::min(results[to], newCost);
-        });
 
-    std::cout << "Distances from node " << source << ":\n";
-    for (uint32_t i = 0; i < graph.numVertices(); ++i) {
-      std::cout << "Node " << i << ": ";
-      if (results[i] == INF)
-        std::cout << "INF\n";
-      else
-        std::cout << results[i] << "\n";
+          if (newCost < results[to]) {
+            results[to] = newCost;
+            parent[to] = from;
+          }
+        });
+  }
+
+  std::vector<Vertex> extractPath(Vertex target) const {
+    std::vector<Vertex> path;
+
+    if (results[target] == INF)
+      return path; // empty = unreachable
+
+    for (Vertex v = target; v != noVertex; v = parent[v]) {
+      path.push_back(v);
     }
+
+    std::reverse(path.begin(), path.end());
+    return path;
+  }
+
+  void printPath(Vertex target) const {
+    auto path = extractPath(target);
+
+    if (path.empty()) {
+      std::cout << "No path\n";
+      return;
+    }
+
+    for (size_t i = 0; i < path.size(); ++i) {
+      std::cout << path[i];
+      if (i + 1 < path.size())
+        std::cout << " -> ";
+    }
+    std::cout << "\n";
   }
 };
