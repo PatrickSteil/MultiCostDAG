@@ -18,6 +18,8 @@ target_compile_options(run PRIVATE
     -march=native
 )
 
+find_package(hwy REQUIRED)
+target_link_libraries(run PRIVATE hwy)
 target_link_libraries(run PRIVATE pthread)
 
 target_compile_options(run PRIVATE
