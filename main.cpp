@@ -51,7 +51,10 @@ int main() {
 
   SweepDAG algo(graph);
   algo.run(0, coeffs);
-  algo.printAllPaths();
+
+  for (int c = 0; c < NUM_COEFFS; ++c) {
+    algo.printPath(c, 10);
+  }
 
   return 0;
 }
