@@ -1,4 +1,4 @@
-# STORK — SIMD Topological Order RanK
+# MultiCostDAG
 
 Experimental code to find multiple "optimal" paths wrt to up to 8 linear combinations.
 
