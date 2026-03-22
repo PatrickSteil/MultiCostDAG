@@ -19,9 +19,9 @@ namespace HWY_NAMESPACE {
 
 namespace hn = hwy::HWY_NAMESPACE;
 
-using D8 = FixedTag<uint32_t, 8>; // 8-lane u32 descriptor
-using Vec8u = VFromD<D8>;         // corresponding vector type
-using Msk8u = MFromD<D8>;         // corresponding mask type
+#if HWY_TARGET != HWY_SCALAR && HWY_TARGET != HWY_EMU128 &&                    \
+    HWY_TARGET != HWY_SSE2 && HWY_TARGET != HWY_SSSE3 &&                       \
+    HWY_TARGET != HWY_SSE4
 
 struct Reg8 {
   HWY_ALIGN uint32_t v[8];
@@ -29,13 +29,13 @@ struct Reg8 {
   Reg8() = default;
 
   HWY_ATTR explicit Reg8(uint32_t val) {
-    D8 d;
+    const FixedTag<uint32_t, 8> d;
     hn::Store(hn::Set(d, val), d, v);
   }
 };
 
 struct CoeffTable {
-  HWY_ALIGN uint32_t col[4][8];
+  HWY_ALIGN uint32_t col[4][8]; // col[dim][k] = coeffs[k][dim]
 
   CoeffTable() = default;
 
@@ -46,12 +46,12 @@ struct CoeffTable {
   }
 };
 
-HWY_ATTR inline Vec8u dot_product8(const Weight &w, const CoeffTable &ct) {
-  const D8 d8;
-  Vec8u acc = hn::Zero(d8);
+HWY_ATTR inline auto dot_product8(const Weight &w, const CoeffTable &ct) {
+  const FixedTag<uint32_t, 8> d8;
+  auto acc = hn::Zero(d8);
   for (int dim = 0; dim < 4; ++dim) {
-    Vec8u wd = hn::Set(d8, w[dim]);
-    Vec8u col = hn::Load(d8, ct.col[dim]);
+    auto wd = hn::Set(d8, w[dim]);
+    auto col = hn::Load(d8, ct.col[dim]);
     acc = hn::Add(acc, hn::Mul(wd, col));
   }
   return acc;
@@ -61,8 +61,8 @@ class SweepDAG {
 private:
   const Graph &graph;
   size_t numV;
-  std::vector<Reg8> results; // results[v].v[k] = best cost to v under coeff k
-  std::vector<Reg8> parent;  // parent[v].v[k]  = predecessor of v on that path
+  std::vector<Reg8> results;
+  std::vector<Reg8> parent;
 
 public:
   SweepDAG(const Graph &graph)
@@ -79,32 +79,29 @@ public:
     reset();
     results[source] = Reg8(0);
 
+    const FixedTag<uint32_t, 8> d8;
     const CoeffTable ct(coeffs);
-    const D8 d8;
-    const Vec8u vinf = hn::Set(d8, INF);
+    const auto vinf = hn::Set(d8, INF);
 
     graph.doForAllEdges(
         [&](const Vertex from, const Vertex to, const Weight &w) HWY_ATTR {
           assert(from < numV && to < numV);
 
-          Vec8u du = hn::Load(d8, results[from].v);
-
+          auto du = hn::Load(d8, results[from].v);
           if (hn::AllTrue(d8, hn::Eq(du, vinf)))
             return;
 
-          Vec8u cand = hn::Add(du, dot_product8(w, ct));
-
-          Vec8u cur = hn::Load(d8, results[to].v);
-
-          Msk8u mask = hn::Lt(cand, cur);
+          auto cand = hn::Add(du, dot_product8(w, ct));
+          auto cur = hn::Load(d8, results[to].v);
+          auto mask = hn::Lt(cand, cur);
 
           if (hn::AllFalse(d8, mask))
             return;
 
           hn::Store(hn::IfThenElse(mask, cand, cur), d8, results[to].v);
 
-          Vec8u old_par = hn::Load(d8, parent[to].v);
-          Vec8u vfrom = hn::Set(d8, static_cast<uint32_t>(from));
+          auto old_par = hn::Load(d8, parent[to].v);
+          auto vfrom = hn::Set(d8, static_cast<uint32_t>(from));
           hn::Store(hn::IfThenElse(mask, vfrom, old_par), d8, parent[to].v);
         });
   }
@@ -146,6 +143,8 @@ public:
     return results[v].v[k];
   }
 };
+
+#endif // HWY_TARGET guard
 
 } // namespace HWY_NAMESPACE
 } // namespace hwy
