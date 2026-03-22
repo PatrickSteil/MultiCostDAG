@@ -40,6 +40,10 @@ public:
 
   void clear();
   void buildFromEdgeList(std::vector<Edge> &edges, std::size_t n);
+  void readCustomDimacsGraph(const std::string &filename);
+
+  std::vector<Vertex> topoSort() const;
+  std::vector<Vertex> reorderByRank();
 
   Graph reverse() const;
 
