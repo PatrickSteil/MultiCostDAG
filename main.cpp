@@ -10,7 +10,7 @@ void configure_parser(cli::Parser &parser) {
 };
 
 int main(int argc, char *argv[]) {
-  cli::Parser parser(argc, argv, "Arc-Flags SIMD");
+  cli::Parser parser(argc, argv, "MultiCostDAG");
   configure_parser(parser);
   parser.run_and_exit_if_error();
 
@@ -20,12 +20,13 @@ int main(int argc, char *argv[]) {
   Graph graph;
   graph.readCustomDimacsGraph(input);
 
-  auto new_id = graph.reorderByRank();
+  // new_id maps old id to new id
+  std::vector<Vertex> new_id = graph.reorderByRank();
 
   if (showStats)
     graph.showStats();
 
-  Weight coeffs[NUM_COEFFS] = {
+  Weight coeffs[8] = {
       Weight(1, 0, 0, 0), // 0: pure time
       Weight(0, 0, 1, 0), // 1: pure cost
       Weight(0, 0, 0, 1), // 2: pure risk
