@@ -35,8 +35,9 @@ int main(int argc, char *argv[]) {
     graph.showStats();
 
   Weight coeffs[8] = {
-      Weight(1, 0, 0, 0, 0, 0, 0, 0), // 0: minimize transfers
-      Weight(0, 0, 1, 0, 0, 0, 0, 0), // 1: minimise transfer duration
+      Weight(1, 0, 0, 0, 0, 0, 0, 0),
+      Weight(0, 1, 0, 0, 0, 0, 0, 0),
+      Weight(0, 0, 1, 0, 0, 0, 0, 0),
   };
 
   Vertex source = old_to_new_mapping[233823];
@@ -45,7 +46,7 @@ int main(int argc, char *argv[]) {
   SweepDAG algo(graph);
   algo.run(source, coeffs);
 
-  for (int c = 0; c < 2; ++c) {
+  for (int c = 0; c < 3; ++c) {
     algo.printPath(c, target);
   }
 
