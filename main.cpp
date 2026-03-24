@@ -35,8 +35,8 @@ int main(int argc, char *argv[]) {
     graph.showStats();
 
   Weight coeffs[8] = {
-      Weight(1, 0, 0, 0), // 0: minimize transfers
-      Weight(0, 0, 1, 0), // 1: minimise transfer duration
+      Weight(1, 0, 0, 0, 0, 0, 0, 0), // 0: minimize transfers
+      Weight(0, 0, 1, 0, 0, 0, 0, 0), // 1: minimise transfer duration
   };
 
   Vertex source = old_to_new_mapping[233823];

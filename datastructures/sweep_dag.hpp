@@ -35,12 +35,12 @@ struct Reg8 {
 };
 
 struct CoeffTable {
-  HWY_ALIGN uint32_t col[4][8]; // col[dim][k] = coeffs[k][dim]
+  HWY_ALIGN uint32_t col[8][8]; // col[dim][k] = coeffs[k][dim]
 
   CoeffTable() = default;
 
   explicit CoeffTable(const Weight coeffs[NUM_COEFFS]) {
-    for (int d = 0; d < 4; ++d)
+    for (int d = 0; d < 8; ++d)
       for (int k = 0; k < NUM_COEFFS; ++k)
         col[d][k] = coeffs[k][d];
   }
@@ -49,7 +49,7 @@ struct CoeffTable {
 HWY_ATTR inline auto dot_product8(const Weight &w, const CoeffTable &ct) {
   const FixedTag<uint32_t, 8> d8;
   auto acc = hn::Zero(d8);
-  for (int dim = 0; dim < 4; ++dim) {
+  for (int dim = 0; dim < 8; ++dim) {
     auto wd = hn::Set(d8, w[dim]);
     auto col = hn::Load(d8, ct.col[dim]);
     acc = hn::Add(acc, hn::Mul(wd, col));
