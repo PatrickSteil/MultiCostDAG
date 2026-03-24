@@ -1,8 +1,15 @@
 #pragma once
 
 #include "types.h"
+
+#include <atomic>
 #include <cassert>
+#include <thread>
 #include <vector>
+
+struct alignas(64) PaddedAtomic {
+  std::atomic_size_t value;
+};
 
 struct Edge {
   Vertex from;
@@ -40,10 +47,15 @@ public:
 
   void clear();
   void buildFromEdgeList(std::vector<Edge> &edges, std::size_t n);
-  void readCustomDimacsGraph(const std::string &filename);
+  void buildFromEdgeList(std::vector<Edge> &edges, std::size_t n,
+                         const int numThreads);
+  void readCustomDimacsGraph(
+      const std::string &filename,
+      const int numThreads = std::thread::hardware_concurrency());
 
   std::vector<Vertex> topoSort() const;
-  std::vector<Vertex> reorderByRank();
+  std::vector<Vertex>
+  reorderByRank(const int numThreads = std::thread::hardware_concurrency());
 
   Graph reverse() const;
 

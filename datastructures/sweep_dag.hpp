@@ -63,15 +63,23 @@ private:
   size_t numV;
   std::vector<Reg8> results;
   std::vector<Reg8> parent;
+  std::vector<uint32_t> timestamps;
+  uint32_t currentEpoch = 0;
 
 public:
   SweepDAG(const Graph &graph)
       : graph(graph), numV(graph.numVertices()), results(numV, Reg8(INF)),
-        parent(numV, Reg8(noVertex)) {}
+        parent(numV, Reg8(noVertex)), timestamps(numV, 0) {}
 
   HWY_ATTR void reset() {
-    std::fill(results.begin(), results.end(), Reg8(INF));
-    std::fill(parent.begin(), parent.end(), Reg8(noVertex));
+    ++currentEpoch;
+
+    if (currentEpoch == 0) {
+      std::fill(results.begin(), results.end(), Reg8(INF));
+      std::fill(parent.begin(), parent.end(), Reg8(noVertex));
+      std::fill(timestamps.begin(), timestamps.end(), 0);
+      currentEpoch = 1;
+    }
   }
 
   HWY_ATTR void run(const Vertex source, const Weight coeffs[NUM_COEFFS]) {
@@ -90,6 +98,12 @@ public:
           auto du = hn::Load(d8, results[from].v);
           if (hn::AllTrue(d8, hn::Eq(du, vinf)))
             return;
+
+          if (currentEpoch != timestamps[to]) {
+            timestamps[to] = currentEpoch;
+            results[to] = Reg8(INF);
+            parent[to] = Reg8(noVertex);
+          }
 
           auto cand = hn::Add(du, dot_product8(w, ct));
           auto cur = hn::Load(d8, results[to].v);

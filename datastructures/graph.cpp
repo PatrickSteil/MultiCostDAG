@@ -2,6 +2,7 @@
 #include "status_log.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -11,6 +12,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 Graph::Graph() : adj(1, 0) {}
 
@@ -62,6 +64,71 @@ void Graph::buildFromEdgeList(std::vector<Edge> &edges, std::size_t n) {
   }
 }
 
+void Graph::buildFromEdgeList(std::vector<Edge> &edges, std::size_t n,
+                              const int numThreads) {
+  clear();
+  std::sort(edges.begin(), edges.end());
+
+  const std::size_t m = edges.size();
+
+  std::vector<PaddedAtomic> degree(n);
+  for (auto &d : degree)
+    d.value.store(0, std::memory_order_relaxed);
+
+  std::vector<std::thread> threads;
+
+  auto worker_count = [&](std::size_t tid) {
+    std::size_t l = tid * m / numThreads;
+    std::size_t r = (tid + 1) * m / numThreads;
+
+    for (std::size_t i = l; i < r; ++i) {
+      degree[edges[i].from].value.fetch_add(1, std::memory_order_relaxed);
+    }
+  };
+
+  for (int t = 0; t < numThreads; ++t)
+    threads.emplace_back(worker_count, t);
+  for (auto &th : threads)
+    th.join();
+
+  adj.resize(n + 1);
+  std::size_t sum = 0;
+  for (std::size_t v = 0; v < n; ++v) {
+    adj[v] = sum;
+    sum += degree[v].value.load(std::memory_order_relaxed);
+  }
+  adj[n] = sum;
+
+  to.resize(m);
+  w.resize(m);
+
+  std::vector<PaddedAtomic> offset(n);
+  for (std::size_t v = 0; v < n; ++v)
+    offset[v].value.store(adj[v], std::memory_order_relaxed);
+
+  threads.clear();
+
+  auto worker_scatter = [&](std::size_t tid) {
+    std::size_t l = tid * m / numThreads;
+    std::size_t r = (tid + 1) * m / numThreads;
+
+    for (std::size_t i = l; i < r; ++i) {
+      const auto &e = edges[i];
+
+      std::size_t idx =
+          offset[e.from].value.fetch_add(1, std::memory_order_relaxed);
+
+      to[idx] = e.to;
+      w[idx] = e.weight;
+    }
+  };
+
+  for (int t = 0; t < numThreads; ++t)
+    threads.emplace_back(worker_scatter, t);
+  for (auto &th : threads)
+    th.join();
+}
+
 /*
  * Format:
 c  comment line (ignored)
@@ -78,7 +145,8 @@ a  2  4  10   1
 a  3  4   4   8
 */
 
-void Graph::readCustomDimacsGraph(const std::string &filename) {
+void Graph::readCustomDimacsGraph(const std::string &filename,
+                                  const int numThreads) {
   StatusLog log("Read graph from file");
 
   std::ifstream file(filename);
@@ -170,7 +238,7 @@ void Graph::readCustomDimacsGraph(const std::string &filename) {
               << edges.size() << " arc lines\n";
   }
 
-  buildFromEdgeList(edges, n);
+  buildFromEdgeList(edges, n, numThreads);
 }
 
 std::vector<Vertex> Graph::topoSort() const {
@@ -209,49 +277,105 @@ std::vector<Vertex> Graph::topoSort() const {
   return order;
 }
 
-std::vector<Vertex> Graph::reorderByRank() {
+std::vector<Vertex> Graph::reorderByRank(const int numThreads) {
   StatusLog log("Reorder graph");
+
   const std::size_t n = numVertices();
+  const std::size_t m = numEdges();
+
   std::vector<Vertex> order = topoSort();
 
   std::vector<Vertex> new_id(n);
-  for (Vertex rank = 0; rank < n; ++rank)
-    new_id[order[rank]] = rank;
 
-  std::vector<Edge> edges;
-  edges.reserve(numEdges());
-  for (Vertex old_u = 0; old_u < n; ++old_u)
-    for (std::size_t i = beginEdge(old_u); i < endEdge(old_u); ++i)
-      edges.push_back({new_id[old_u], new_id[to[i]], w[i]});
+  {
+    std::vector<std::thread> threads;
+    auto worker = [&](int tid) {
+      std::size_t l = tid * n / numThreads;
+      std::size_t r = (tid + 1) * n / numThreads;
+      for (std::size_t i = l; i < r; ++i)
+        new_id[order[i]] = i;
+    };
 
-  buildFromEdgeList(edges, n);
+    for (int t = 0; t < numThreads; ++t)
+      threads.emplace_back(worker, t);
+    for (auto &th : threads)
+      th.join();
+  }
+
+  std::vector<PaddedAtomic> degree(n);
+  for (auto &d : degree)
+    d.value.store(0, std::memory_order_relaxed);
+
+  {
+    std::vector<std::thread> threads;
+
+    auto worker = [&](int tid) {
+      std::size_t l = tid * n / numThreads;
+      std::size_t r = (tid + 1) * n / numThreads;
+
+      for (Vertex u = l; u < r; ++u) {
+        Vertex nu = new_id[u];
+        for (std::size_t i = beginEdge(u); i < endEdge(u); ++i) {
+          degree[nu].value.fetch_add(1, std::memory_order_relaxed);
+        }
+      }
+    };
+
+    for (int t = 0; t < numThreads; ++t)
+      threads.emplace_back(worker, t);
+    for (auto &th : threads)
+      th.join();
+  }
+
+  std::vector<std::size_t> new_adj(n + 1);
+  std::size_t sum = 0;
+  for (std::size_t v = 0; v < n; ++v) {
+    new_adj[v] = sum;
+    sum += degree[v].value.load(std::memory_order_relaxed);
+  }
+  new_adj[n] = sum;
+
+  std::vector<Vertex> new_to(m);
+  std::vector<Weight> new_w(m);
+
+  std::vector<PaddedAtomic> offset(n);
+  for (std::size_t v = 0; v < n; ++v)
+    offset[v].value.store(new_adj[v], std::memory_order_relaxed);
+
+  {
+    std::vector<std::thread> threads;
+
+    auto worker = [&](int tid) {
+      std::size_t l = tid * n / numThreads;
+      std::size_t r = (tid + 1) * n / numThreads;
+
+      for (Vertex u = l; u < r; ++u) {
+        Vertex nu = new_id[u];
+
+        for (std::size_t i = beginEdge(u); i < endEdge(u); ++i) {
+          Vertex v = to[i];
+          Vertex nv = new_id[v];
+
+          std::size_t idx =
+              offset[nu].value.fetch_add(1, std::memory_order_relaxed);
+
+          new_to[idx] = nv;
+          new_w[idx] = w[i];
+        }
+      }
+    };
+
+    for (int t = 0; t < numThreads; ++t)
+      threads.emplace_back(worker, t);
+    for (auto &th : threads)
+      th.join();
+  }
+
+  adj = std::move(new_adj);
+  to = std::move(new_to);
+  w = std::move(new_w);
 
   return new_id;
-}
-
-Graph Graph::reverse() const {
-  Graph rev;
-  rev.adj.assign(numVertices() + 1, 0);
-  rev.to.resize(numEdges());
-  rev.w.resize(numEdges());
-
-  for (Vertex u = 0; u < numVertices(); ++u)
-    for (std::size_t i = beginEdge(u); i < endEdge(u); ++i)
-      ++rev.adj[to[i] + 1];
-
-  for (std::size_t i = 1; i <= numVertices(); ++i)
-    rev.adj[i] += rev.adj[i - 1];
-
-  std::vector<std::size_t> offset = rev.adj;
-  for (Vertex u = 0; u < numVertices(); ++u) {
-    for (std::size_t i = beginEdge(u); i < endEdge(u); ++i) {
-      Vertex v = to[i];
-      std::size_t idx = offset[v]++;
-      rev.to[idx] = u;
-      rev.w[idx] = w[i];
-    }
-  }
-  return rev;
 }
 
 void Graph::showStats() const {

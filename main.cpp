@@ -1,12 +1,17 @@
 #include "cmdparser.hpp"
 #include "graph.hpp"
 #include "sweep_dag.hpp"
+
 #include <iostream>
+#include <thread>
 
 void configure_parser(cli::Parser &parser) {
   parser.set_required<std::string>("i", "input_graph",
                                    "Input graph in DIMACs format.");
   parser.set_optional<bool>("s", "show_stats", false, "Show statistics.");
+  parser.set_optional<int>(
+      "t", "num_threads", std::thread::hardware_concurrency(),
+      "Number of threads to use while e.g. building datastructures.");
 };
 
 int main(int argc, char *argv[]) {
@@ -16,34 +21,32 @@ int main(int argc, char *argv[]) {
 
   const std::string input = parser.get<std::string>("i");
   const bool showStats = parser.get<bool>("s");
+  int numThreads = parser.get<int>("t");
+
+  numThreads = std::max(numThreads, 1);
+  numThreads = std::min(numThreads, (int)std::thread::hardware_concurrency());
 
   Graph graph;
-  graph.readCustomDimacsGraph(input);
+  graph.readCustomDimacsGraph(input, numThreads);
 
-  // new_id maps old id to new id
-  std::vector<Vertex> new_id = graph.reorderByRank();
+  std::vector<Vertex> old_to_new_mapping = graph.reorderByRank(numThreads);
 
   if (showStats)
     graph.showStats();
 
   Weight coeffs[8] = {
-      Weight(1, 0, 0, 0), // 0: pure time
-      Weight(0, 0, 1, 0), // 1: pure cost
-      Weight(0, 0, 0, 1), // 2: pure risk
-      Weight(0, 1, 0, 0), // 3: minimise transfers only
-      Weight(1, 3, 1, 0), // 4: penalise transfers heavily
-      Weight(1, 1, 1, 1), // 5: all equal
-      Weight(2, 0, 1, 3), // 6: time + risk focus
-      Weight(1, 2, 3, 2), // 7: cost + transfers focus
+      Weight(1, 0, 0, 0), // 0: minimize transfers
+      Weight(0, 0, 1, 0), // 1: minimise transfer duration
   };
 
-  Vertex source = new_id[0];
+  Vertex source = old_to_new_mapping[233823];
+  Vertex target = old_to_new_mapping[753501];
 
   SweepDAG algo(graph);
   algo.run(source, coeffs);
 
-  for (int c = 0; c < NUM_COEFFS; ++c) {
-    algo.printPath(c, new_id[10]);
+  for (int c = 0; c < 2; ++c) {
+    algo.printPath(c, target);
   }
 
   return 0;
