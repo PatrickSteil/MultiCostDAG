@@ -56,7 +56,7 @@ TEST(SweepDAGTest, ShortestPath_TimeDimension) {
   Weight coeffs[NUM_COEFFS];
   makeCoeff(coeffs, 0); // minimize time
 
-  algo.run(0, coeffs);
+  algo.run(0, 11, coeffs);
 
   auto path = algo.extractPath(0, 11); // target = node 12 (0-based 11)
 
@@ -77,7 +77,7 @@ TEST(SweepDAGTest, ShortestPath_CostDimension) {
   Weight coeffs[NUM_COEFFS];
   makeCoeff(coeffs, 2); // minimize cost
 
-  algo.run(0, coeffs);
+  algo.run(0, 11, coeffs);
 
   auto path = algo.extractPath(0, 11);
 
@@ -99,7 +99,7 @@ TEST(SweepDAGTest, UnreachableNode) {
   SweepDAG algo(g);
 
   Weight coeffs[NUM_COEFFS] = {};
-  algo.run(0, coeffs);
+  algo.run(0, 2, coeffs);
 
   auto path = algo.extractPath(0, 2);
 
@@ -116,10 +116,10 @@ TEST(SweepDAGTest, ConsistencyAcrossRuns) {
   Weight coeffs[NUM_COEFFS];
   makeCoeff(coeffs, 0);
 
-  algo.run(0, coeffs);
+  algo.run(0, 11, coeffs);
   auto p1 = algo.extractPath(0, 11);
 
-  algo.run(0, coeffs);
+  algo.run(0, 11, coeffs);
   auto p2 = algo.extractPath(0, 11);
 
   EXPECT_EQ(p1, p2);

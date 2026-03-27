@@ -59,3 +59,46 @@ target_compile_options(run PRIVATE
 target_compile_options(run PRIVATE
     $<$<CONFIG:Release>:-O3 -DNDEBUG>
 )
+
+find_package(GTest QUIET) 
+if(NOT GTest_FOUND) 
+    message(STATUS "GTest not found, fetching from GitHub...") 
+    FetchContent_Declare( googletest GIT_REPOSITORY https://github.com/google/googletest.git GIT_TAG v1.17.0 ) 
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE) 
+    FetchContent_MakeAvailable(googletest) 
+endif()
+
+enable_testing()
+include(GoogleTest)
+
+file(GLOB TEST_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/*.cpp
+)
+
+foreach(test_src ${TEST_SOURCES})
+    get_filename_component(test_name ${test_src} NAME_WE)
+
+    add_executable(${test_name}
+        ${test_src}
+        datastructures/graph.cpp
+        datastructures/sweep_dag.cpp
+    )
+
+    target_include_directories(${test_name} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/datastructures
+        ${CMAKE_CURRENT_SOURCE_DIR}/helpers
+    )
+
+    target_compile_options(${test_name} PRIVATE -Wall -march=native)
+
+    target_link_libraries(${test_name} PRIVATE hwy)
+
+    if(TARGET GTest::gtest_main)
+        target_link_libraries(${test_name} PRIVATE GTest::gtest_main)
+    else()
+        target_link_libraries(${test_name} PRIVATE gtest_main)
+    endif()
+
+    gtest_discover_tests(${test_name})
+endforeach()

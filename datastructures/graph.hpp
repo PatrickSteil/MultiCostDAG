@@ -61,8 +61,10 @@ public:
 
   void showStats() const;
 
-  template <typename F> void doForAllEdges(F &&f) const {
-    for (Vertex u = 0; u < numVertices(); ++u)
+  template <typename F>
+  void doForAllEdges(F &&f, const Vertex start = 0,
+                     const Vertex end = noVertex) const {
+    for (Vertex u = start; u < numVertices() && u < end; ++u)
       for (std::size_t i = beginEdge(u); i < endEdge(u); ++i)
         f(u, to[i], w[i]);
   }

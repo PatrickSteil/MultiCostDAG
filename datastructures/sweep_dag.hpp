@@ -83,8 +83,10 @@ public:
     }
   }
 
-  HWY_ATTR void run(const Vertex source, const Weight coeffs[NUM_COEFFS]) {
+  HWY_ATTR void run(const Vertex source, const Vertex target,
+                    const Weight coeffs[NUM_COEFFS]) {
     assert(source < numV);
+    assert(target < numV);
     reset();
     results[source] = Reg8(0);
 
@@ -118,7 +120,18 @@ public:
           auto old_par = hn::Load(d8, parent[to].v);
           auto vfrom = hn::Set(d8, static_cast<uint32_t>(from));
           hn::Store(hn::IfThenElse(mask, vfrom, old_par), d8, parent[to].v);
-        });
+        },
+        source, target);
+  }
+
+  int numFoundPaths(const Vertex target) const {
+    int result = 0;
+#pragma GCC unroll(NUM_COEFFS)
+    for (int k = 0; k < NUM_COEFFS; ++k) {
+      result += (results[target].v[k] != INF);
+    }
+
+    return result;
   }
 
   std::vector<Vertex> extractPath(int k, Vertex target) const {
