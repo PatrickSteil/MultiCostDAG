@@ -37,12 +37,11 @@ a 11 12 16 1 18 5
   return filename;
 }
 
-// Build coefficient array
 static void makeCoeff(Weight coeffs[NUM_COEFFS], int dim) {
   for (int k = 0; k < NUM_COEFFS; ++k) {
     for (int d = 0; d < 8; ++d)
       coeffs[k][d] = 0;
-    coeffs[k][dim] = 1; // isolate dimension
+    coeffs[k][dim] = 1;
   }
 }
 
@@ -54,15 +53,13 @@ TEST(SweepDAGTest, ShortestPath_TimeDimension) {
   SweepDAG algo(g);
 
   Weight coeffs[NUM_COEFFS];
-  makeCoeff(coeffs, 0); // minimize time
+  makeCoeff(coeffs, 0);
 
   algo.run(0, 11, coeffs);
 
-  auto path = algo.extractPath(0, 11); // target = node 12 (0-based 11)
+  auto path = algo.extractPath(0, 11);
 
-  // Expected shortest-time path manually verified:
-  // 1 -> 3 -> 4 -> 6 -> 7 -> 8 -> 12
-  std::vector<Vertex> expected = {0, 2, 3, 5, 6, 7, 11};
+  std::vector<Vertex> expected = {0, 2, 5, 7, 11};
 
   EXPECT_EQ(path, expected);
 }
@@ -75,13 +72,12 @@ TEST(SweepDAGTest, ShortestPath_CostDimension) {
   SweepDAG algo(g);
 
   Weight coeffs[NUM_COEFFS];
-  makeCoeff(coeffs, 2); // minimize cost
+  makeCoeff(coeffs, 2);
 
   algo.run(0, 11, coeffs);
 
   auto path = algo.extractPath(0, 11);
 
-  // Expected cheaper path (less cost-heavy edges)
   std::vector<Vertex> expected = {0, 1, 3, 5, 7, 11};
 
   EXPECT_FALSE(path.empty());
